@@ -1,0 +1,170 @@
+//n9720316 Assignment 2
+//Note, these statements were executed individually and outputs were tested and recorded individually
+
+//TASK 1
+CREATE MINING STRUCTURE [Car_Renter]
+(
+[Order_ID] LONG KEY,
+[Customer_Age] LONG DISCRETIZED(Automatic,10),
+[Customer_Gender]TEXT DISCRETE,
+[Customer_Occupation] TEXT DISCRETE,
+[Car_MakeName]TEXT DISCRETE,
+[Car_Model]TEXT DISCRETE,
+[Car_Series] TEXT DISCRETE,
+[Car_SeriesYear] LONG DISCRETE,
+[Store_Name] TEXT DISCRETE
+)
+WITH HOLDOUT (30 PERCENT or 1000 CASES)
+
+GO
+
+//TASK 2
+
+//inputs: Customer info, Car info
+//outputs: Predicted Customer_Occupation
+ALTER MINING STRUCTURE [Car_Renter]
+ADD MINING MODEL [Prediction_1]
+(
+	[Order_ID],
+	[Customer_Age],
+	[Customer_Gender],
+	[Customer_Occupation] PREDICT,
+	[Car_MakeName],
+	[Car_Model],
+	[Car_Series],
+	[Car_SeriesYear]
+)USING Microsoft_Association_Rules
+WITH DRILLTHROUGH
+
+GO
+
+//inputs: Car info
+//outputs: Predicted Customer Info
+ALTER MINING STRUCTURE [Car_Renter]
+ADD MINING MODEL [Prediction_2]
+(
+	[Order_ID],
+	[Customer_Age] PREDICT_ONLY,
+	[Customer_Gender] PREDICT_ONLY,
+	[Customer_Occupation] PREDICT_ONLY,
+	[Car_MakeName],
+	[Car_Model],
+	[Car_Series],
+	[Car_SeriesYear]
+)USING Microsoft_Association_Rules
+WITH DRILLTHROUGH
+
+GO
+
+//inputs: Customer info, Car info
+//outputs: Predicted Store_Name
+ALTER MINING STRUCTURE [Car_Renter]
+ADD MINING MODEL [Prediction_3]
+(
+	[Order_ID],
+	[Customer_Age],
+	[Customer_Gender],
+	[Customer_Occupation],
+	[Car_MakeName],
+	[Car_Model],
+	[Car_Series],
+	[Car_SeriesYear],
+	[Store_Name] PREDICT_ONLY
+)USING Microsoft_Association_Rules
+WITH DRILLTHROUGH
+
+GO
+
+//inputs: Car info, Customer info
+//outputs: Predicted Car info
+ALTER MINING STRUCTURE [Car_Renter]
+ADD MINING MODEL [Prediction_4]
+(
+	[Order_ID],
+	[Customer_Age],
+	[Customer_Gender],
+	[Customer_Occupation],
+	[Car_MakeName] PREDICT,
+	[Car_Model] PREDICT,
+	[Car_Series] PREDICT,
+	[Car_SeriesYear] PREDICT
+)USING Microsoft_Association_Rules
+WITH DRILLTHROUGH
+
+GO
+
+//TASK 3
+
+// filling Mining structure with data and generating test and training sets
+INSERT INTO MINING STRUCTURE [Car_Renter]
+(
+[Order_ID] ,
+[Customer_Age],
+[Customer_Gender],
+[Customer_Occupation],
+[Car_MakeName],
+[Car_Model],
+[Car_Series],
+[Car_SeriesYear],
+[Store_Name]
+)
+OPENQUERY(CarRentalXYZ,
+'SELECT [Order_ID], cst.Customer_Age, cst.Customer_Gender, cst.Customer_Occupation, car.Car_MakeName, car.Car_Model, car.Car_Series, car.Car_SeriesYear, str.Store_Name
+FROM dbo.XYZ_RentalOrder AS fct
+LEFT JOIN dbo.XYZ_Customer AS cst ON cst.Customer_ID = fct.Order_Customer
+LEFT JOIN dbo.XYZ_Car AS car ON car.Car_ID = fct.Order_Car
+LEFT JOIN dbo.XYZ_Store AS str ON str.Store_ID = fct.Order_Store')
+
+GO
+
+//TASK 4
+
+SELECT q.Customer_Age, q.Customer_Gender, q.Car_MakeName, q.Car_Model, q.Car_Series, q.Car_SeriesYear,
+	PREDICT([Customer_Occupation] AS [[Prediction on Car_Renter])
+From
+	[Prediction_1]
+NATURAL PREDICTION JOIN
+(SELECT 54 AS Customer_Age, 'M' AS Customer_Gender, '3' AS Car_Model, 'Professional' AS Occupation, 'BMW' AS Car_MakeName, 'E36 28i' AS Car_Series, '1996' AS Car_SeriesYear ) AS q
+
+GO
+
+SELECT t.Car_MakeName, t.Car_Model, t.Car_Series, t.Car_SeriesYear,
+  PREDICT([Customer_Age] AS [Prediction on Car_Renter]),
+  PREDICT([Customer_Gender] AS [Prediction on Car_Renter]),
+  PREDICT([Customer_Occupation] AS [Prediction on Car_Renter])
+FROM
+  [Prediction_2]
+NATURAL PREDICTION JOIN
+(SELECT * FROM [Prediction_2].CASES WHERE IsTestCase()
+ ) AS t
+
+ GO
+
+ SELECT t.Car_MakeName, t.Car_Model, t.Car_Series, t.Car_SeriesYear, t.Customer_Age, t.Customer_Gender, t.Customer_Occupation,
+  PREDICT([Store_Name] AS [Prediction on Car_Renter])
+FROM
+  [Prediction_3]
+NATURAL PREDICTION JOIN
+ OPENQUERY(CarRentalXYZ,'SELECT [Order_ID], cst.Customer_Age, cst.Customer_Gender, cst.Customer_Occupation, car.Car_MakeName, car.Car_Model, car.Car_Series, car.Car_SeriesYear, str.Store_Name
+FROM dbo.XYZ_RentalOrder AS fct
+LEFT JOIN dbo.XYZ_Customer AS cst ON cst.Customer_ID = fct.Order_Customer
+LEFT JOIN dbo.XYZ_Car AS car ON car.Car_ID = fct.Order_Car
+LEFT JOIN dbo.XYZ_Store AS str ON str.Store_ID = fct.Order_Store') AS t
+
+GO
+
+SELECT t.Car_MakeName, t.Car_Model, t.Car_Series, t.Car_SeriesYear, t.Customer_Age, t.Customer_Gender, t.Customer_Occupation,
+  PREDICT([Car_MakeName] AS [Prediction on Car_Renter]),
+  PREDICT([Car_Model] AS [Prediction on Car_Renter]),
+  PREDICT([Car_Series] AS [Prediction on Car_Renter]),
+  PREDICT([Car_SeriesYear] AS [Prediction on Car_Renter])
+FROM
+  [Prediction_4]
+NATURAL PREDICTION JOIN
+ OPENQUERY(CarRentalXYZ,'SELECT [Order_ID], cst.Customer_Age, cst.Customer_Gender, cst.Customer_Occupation, car.Car_MakeName, car.Car_Model, car.Car_Series, car.Car_SeriesYear, str.Store_Name
+FROM dbo.XYZ_RentalOrder AS fct
+LEFT JOIN dbo.XYZ_Customer AS cst ON cst.Customer_ID = fct.Order_Customer
+LEFT JOIN dbo.XYZ_Car AS car ON car.Car_ID = fct.Order_Car
+LEFT JOIN dbo.XYZ_Store AS str ON str.Store_ID = fct.Order_Store') AS t
+
+
